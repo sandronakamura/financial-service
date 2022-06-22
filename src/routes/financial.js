@@ -6,7 +6,7 @@ const route = express.Router();
 
 route.post("/financial", verify_token, (req, res) => {
   const data = new Financial(req.body);
-  data.apikey = req.headers.token;
+  data.apikey = req.data.apikey;
   data.clientid = req.data.id;
 
   data
