@@ -1,23 +1,41 @@
 const express = require("express");
 const Financial = require("../model/financial");
 const verify_token = require("../middleware/checkToken");
-
+const amqp = require("amqplib");
 const route = express.Router();
 
-route.post("/financial", verify_token, (req, res) => {
-  const data = new Financial(req.body);
-  data.apikey = req.data.apikey;
-  data.clientid = req.data.id;
+var channel, connection;
 
-  data
-    .save()
-    .then((result) => {
-      res.status(201).send({ output: "Cadastro realizado: ", payload: result });
-    })
-    .catch((error) => {
-      res.status(500).send({ output: `Erro ao cadastrar: ${error}` });
+connect();
+async function connect() {
+  try {
+    const amqpServer = "amqp://localhost";
+    connection = await amqp.connect(amqpServer);
+    channel = await connection.createChannel();
+    await channel.assertQueue("ClientData");
+    channel.consume("ClientData", (data) => {
+      route.post("/financial", verify_token, (req, res) => {
+        const newData = new Financial(req.body);
+        const receiveddata = JSON.parse((data.content).toString());
+        newData.apikey = receiveddata.apikey;
+        newData
+          .save()
+          .then((result) => {
+            res
+              .status(201)
+              .send({ output: "Cadastro realizado: ", payload: result });
+          })
+          .catch((error) => {
+            res.status(500).send({ output: `Erro ao cadastrar: ${error}` });
+          });
+      });
+
+      channel.ack(data);
     });
-});
+  } catch (ex) {
+    console.error(ex);
+  }
+}
 
 route.put("/financial/:id", verify_token, (req, res) => {
   Financial.findByIdAndUpdate(
